@@ -2,7 +2,7 @@ name: AlgoSec
 on:
   workflow_call:
     secrets:
-       GH_TOKEN:
+       GITHUB_TOKEN:
         description: 'A token passed from the caller workflow'
         required: false
        TF_API_TOKEN:
