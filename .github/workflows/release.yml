@@ -311,7 +311,7 @@ jobs:
           analysis_out: ${{ steps.analysis_status.outputs.stdout}}
           analysis_err: ${{ steps.analysis_status.outputs.stderr}}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const CODE_BLOCK = '```';
             const terraform_result = (${{ env.terraform_status }} == 0) ? ':heavy_check_mark:' : ':x:';
