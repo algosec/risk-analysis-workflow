@@ -2,7 +2,16 @@ name: AlgoSec
 on:
   workflow_call:
     secrets:
-      access-token:
+      github-token:
+        description: 'A token passed from the caller workflow'
+        required: false
+      tf-api-token:
+        description: 'A token passed from the caller workflow'
+        required: false
+      aws-secret-access-key:
+        description: 'A token passed from the caller workflow'
+        required: false
+      aws-access-key-id:
         description: 'A token passed from the caller workflow'
         required: false
 env:
