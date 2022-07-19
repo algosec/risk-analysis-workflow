@@ -2,6 +2,9 @@ name: AlgoSec
 on:
   workflow_call:
     secrets:
+       GH_TOKEN:
+        description: 'A token passed from the caller workflow'
+        required: false
        TF_API_TOKEN:
         description: 'A token passed from the caller workflow'
         required: false
@@ -31,14 +34,19 @@ jobs:
       # Make sure we have some code to diff.
       - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
 
       - name: Check debug flag
         id: check_debug
         run: echo "::set-output debug=$(if [ -z ${{ secrets.ALGOSEC_IS_DEBUG }} ]; then echo false; else echo true; fi;)"
 
       - name: Get changed files
+        env:
+          github-token: ${{ secrets.GH_TOKEN }}
         id: changes
         # Set outputs using the command.
+        
         run: |
           # Pull Request
           git fetch origin "${{ github.base_ref }}" --depth=1
@@ -67,7 +75,6 @@ jobs:
 
           echo "Prepared working matrix: $matrix_output"
           echo "::set-output name=matrix::${matrix_output}"
-
   echomatrix:
     needs: [changedfiles]
     if: needs.changedfiles.outputs.debug == true
@@ -312,7 +319,7 @@ jobs:
           analysis_out: ${{ steps.analysis_status.outputs.stdout}}
           analysis_err: ${{ steps.analysis_status.outputs.stderr}}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const CODE_BLOCK = '```';
             const terraform_result = (${{ env.terraform_status }} == 0) ? ':heavy_check_mark:' : ':x:';
