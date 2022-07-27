@@ -311,7 +311,7 @@ jobs:
       - name: Comment on PR
         # update Pull Request by the operation status
         # this code is using Node.js
-        uses: actions/github-script@v6
+        uses: actions/github-script@v5
         with:
           github-token: ${{ secrets.GH_TOKEN }}
         env:
