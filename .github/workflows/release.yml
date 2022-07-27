@@ -18,10 +18,6 @@ env:
   S3_DEST: devsecops-dev/github-codeanalysis
   API_URL: "https://31p8mo93gl.execute-api.us-east-1.amazonaws.com/dev/response"
 jobs:
-  debug:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: hmarr/debug-action@v2
   changedfiles:
     runs-on: ubuntu-latest
     # Map a step output to a job output
@@ -34,30 +30,23 @@ jobs:
       # Make sure we have some code to diff.
       - name: Checkout repository
         uses: actions/checkout@v2
-        with:
-          github-token: ${{ secrets.GH_TOKEN }}
 
       - name: Check debug flag
         id: check_debug
         run: echo "::set-output debug=$(if [ -z ${{ secrets.ALGOSEC_IS_DEBUG }} ]; then echo false; else echo true; fi;)"
 
       - name: Get changed files
-        env:
-          github-token: ${{ secrets.GH_TOKEN }}
         id: changes
         # Set outputs using the command.
-        
         run: |
           # Pull Request
           git fetch origin "${{ github.base_ref }}" --depth=1
           # Get the list of all changed resources
           diff_result=$(git diff --name-only "origin/${{ github.base_ref }}" ${{ github.sha }} )
           echo "Diff between origin/${{ github.base_ref }} and ${{ github.sha }}"
-
           # Extract terraform's files
           terraform_files=$(echo $diff_result | tr -s '[[:space:]]' '\n' | grep -o '.*\.tf$')
           echo "Changed Terraform's files: $terraform_files"
-
           #extract folders where the changed teraforms files are stored
           #and create json to proceed them in the matrix style
           matrix_output="{\"include\":[ "
@@ -72,7 +61,6 @@ jobs:
             fi
           done
           matrix_output="$matrix_output ]}"
-
           echo "Prepared working matrix: $matrix_output"
           echo "::set-output name=matrix::${matrix_output}"
   echomatrix:
@@ -109,8 +97,8 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.2.5
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_version: 1.2.5
 
       - name: Terraform Run
         id: terraform_run
@@ -118,14 +106,12 @@ jobs:
         run: |
           tmp_stdout=stdout.txt
           tmp_stderr=stderr.txt
-
           # Run command and control its stdout & stderr
           run_command(){
               #echo  ">>>>" Run "$@"
               eval "$@" >$tmp_stdout 2>$tmp_stderr
               return $?
           }
-
           # Run command and check its execution state
           # If command's exit code not 0 - terminate processing and print err and out to the relevant standard stream
           run_and_check(){
@@ -139,14 +125,12 @@ jobs:
                 #echo ">>>>" Command [$*] completed
               fi
           }
-
           run_and_check terraform init
           run_command terraform fmt -diff
           run_and_check terraform validate -no-color
           run_and_check terraform plan -input=false -no-color -out=/tmp/tf.out
           cat $tmp_stdout
           exit 0
-
       - name: Terraform Plan Json
         if: steps.terraform_run.outputs.exitcode == 0
         id: plan_to_json
@@ -158,7 +142,6 @@ jobs:
           echo "Terraform running stderr ${{ steps.terraform_run.outputs.stderr }}"
           echo "Terraform running stdout ${{ steps.terraform_run.outputs.stdout }}"
           echo "Terraform plan-to-json status ${{ steps.plan_to_json.outputs.exitcode }}"
-
       ################################ Aws steps ################################
       - name: Generate uuid for tmp file name
         if: steps.terraform_run.outputs.exitcode == 0
@@ -174,13 +157,11 @@ jobs:
           cat << EOF > /tmp/tf.json.out
           ${{ steps.plan_to_json.outputs.stdout }}
           EOF
-
       - name: Copy tmp file into S3
         if: steps.terraform_run.outputs.exitcode == 0
         run: |
           cat /tmp/tf.json.out
           aws s3 cp /tmp/tf.json.out s3://${{env.S3_DEST}}/tmp${{ steps.generate-uuid.outputs.uuid }}.out --metadata customer=${{ github.repository_owner }},action_id=${{ steps.generate-uuid.outputs.uuid }}
-
       - name: Wait till analysis complete
         if: steps.terraform_run.outputs.exitcode == 0
         id: analysis_status
@@ -191,7 +172,6 @@ jobs:
             output=$(curl -s "${{env.API_URL}}?customer=${{ github.repository_owner }}&action_id=${{ steps.generate-uuid.outputs.uuid }}");
             echo $output
             status=$(echo $output | jq -r '.message_found')
-
             if [[ ${status^^} == "TRUE" ]];
             then
               # parse return JSON and extract relevant information
@@ -200,11 +180,9 @@ jobs:
               result_success=$(echo $result | jq -r '.success')
               echo "sucess: $result_success"
               additions=$(echo $result | jq -r '.additions')
-
               # Write risk analysys's json inti file for post processing
               echo "additions: $additions"
               echo $additions > /tmp/risk_analysis.json
-
               analysis_state=$(echo $additions | jq -r '.analysis_state')
               echo "analysis state: $analysis_state"
               if [[ ${result_success^^} == "TRUE" && ${analysis_state^^} == "TRUE" ]]; then analysis_result=true; else analysis_result=false; fi
@@ -214,7 +192,6 @@ jobs:
               sleep 10
             fi
           done
-
           if [[ ${status^^} == "TRUE" && $analysis_result == true ]];
           then
             exit_code=0
@@ -230,7 +207,6 @@ jobs:
             exit_code=1
             echo "::set-output name=stderr::$(echo "The analysis process completed with error. Check report")"
           fi
-
           echo "::set-output name=exitcode::${exit_code}"
         continue-on-error: true
 
@@ -257,7 +233,6 @@ jobs:
               esac
               echo "$severity_icon"
           }
-
           value=$(</tmp/risk_analysis.json)
           analysis_result=$(echo "$value" | jq -r '.analysis_result')
           # echo $analysis_result
@@ -276,7 +251,6 @@ jobs:
               items=$(jq -r '.items' <<< "$risk_value");
               
               converted_servirity=$(convert_severity $severity)
-
               # Print converted json by markdown syntax
               echo -e "<details open="true">" >> /tmp/analysis_report.txt
               echo -e "<summary>:$converted_servirity: $risk_id</summary>" >> /tmp/analysis_report.txt
@@ -292,28 +266,21 @@ jobs:
               echo -e "$items" >> /tmp/analysis_report.txt
               echo -e '```' >> /tmp/analysis_report.txt
           done
-
           echo -e "> **Severity descriptions**" >> /tmp/analysis_report.txt
           echo -e ">> :boom: - critical" >> /tmp/analysis_report.txt
           echo -e ">> :fire: - high" >> /tmp/analysis_report.txt
           echo -e ">> :exclamation: - medium" >> /tmp/analysis_report.txt
           echo -e ">> :grey_question: - low" >> /tmp/analysis_report.txt
-
-
-
       - name: Echo status
         run: |
           echo "Analyser status ${{ steps.analysis_status.outputs.exitcode }}"
           echo "Analyser stderr ${{ steps.analysis_status.outputs.stderr }}"
           echo "Analyser stdout ${{ steps.analysis_status.outputs.stdout }}"
-
       ################################ Update PR and complete the job ################################
       - name: Comment on PR
         # update Pull Request by the operation status
         # this code is using Node.js
         uses: actions/github-script@v5
-        with:
-          github-token: ${{ secrets.GH_TOKEN }}
         env:
           terraform_status: ${{ steps.terraform_run.outputs.exitcode }}
           terraform_out: ${{ steps.terraform_run.outputs.stdout }}
@@ -321,6 +288,8 @@ jobs:
           analysis_status: ${{ steps.analysis_status.outputs.exitcode}}
           analysis_out: ${{ steps.analysis_status.outputs.stdout}}
           analysis_err: ${{ steps.analysis_status.outputs.stderr}}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const CODE_BLOCK = '```';
             const terraform_result = (${{ env.terraform_status }} == 0) ? ':heavy_check_mark:' : ':x:';
@@ -328,56 +297,41 @@ jobs:
             
             const fs = require('fs')
             const analysis_report = fs.readFileSync('/tmp/analysis_report.txt', 'utf8')
-
             const output = `
             ##  ${ analysis_result } Code Analysis :cop:
             <details open="true">
             <summary>Report</summary>
-
             ${ analysis_report }
             </details>
-
             <details>
             <summary>Logs</summary>
             Output
-
             ${ CODE_BLOCK }
             ${{ env.analysis_out }}
             ${ CODE_BLOCK }
-
             Errors
-
             ${ CODE_BLOCK }
             ${{ env.analysis_err }}
             ${ CODE_BLOCK }
-
             </details>
-
             ## ${ terraform_result } Terraform Processing ⚙️
             <details><summary>Terraform Log</summary>
             Output
-
             ${ CODE_BLOCK }
             ${{ env.terraform_out }}
             ${ CODE_BLOCK }
-
             Errors
-
             ${ CODE_BLOCK }
             ${{ env.terraform_stderr }}
             ${ CODE_BLOCK }
-
             </details> <!-- End Format Logs -->
-
             *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.tf_actions_working_dir }}\`, Workflow: \`${{ github.workflow }}\`*`;
-
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
             })
-
       - name: Check Results
         shell: bash
         run: |
